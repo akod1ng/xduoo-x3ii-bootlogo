@@ -1,0 +1,52 @@
+#!/bin/sh
+#
+# Boot-logo hook for the xDuoo X3II (added to the SinuXVR custom firmware
+# by tools/build_update.sh, see https://github.com/akod1ng/xduoo-x3ii-bootlogo).
+#
+# On every start it looks for a folder "bootlogo" in the root of the SD card:
+#   bootlogo/logo.bin            -> written to the boot-logo flash partition
+#                                   (renamed to logo.bin.done afterwards)
+#   bootlogo/boot_animation.png  -> replaces the second start screen
+#                                   (renamed to boot_animation.png.done)
+# A log is written to bootlogo/flash_log.txt, backups of the original logo
+# are written to bootlogo/ as well. Without that folder nothing happens.
+# Runs in the background so start-up is not delayed. Always exits 0.
+
+case "$1" in
+  start)
+    (
+        n=0
+        while [ $n -lt 40 ] && ! grep -q ' /mnt/sd_0 ' /proc/mounts; do
+            sleep 1; n=$((n + 1))
+        done
+        D=/mnt/sd_0/bootlogo
+        [ -d "$D" ] || exit 0
+        L="$D/flash_log.txt"
+
+        if [ -f "$D/logo.bin" ]; then
+            echo "=== $(date) ===" >> "$L"
+            if sh /usr/bin/bootlogo_flash.sh "$D/logo.bin" "$D" >> "$L" 2>&1; then
+                mv "$D/logo.bin" "$D/logo.bin.done"
+            else
+                mv "$D/logo.bin" "$D/logo.bin.failed"
+            fi
+            sync
+        fi
+
+        if [ -f "$D/boot_animation.png" ]; then
+            A=/usr/resource/gui/boot_animation/animation00.png
+            [ -f "$A.orig" ] || cp -p "$A" "$A.orig"
+            [ -f "$D/original_boot_animation.png" ] || cp "$A.orig" "$D/original_boot_animation.png"
+            if cp "$D/boot_animation.png" "$A"; then
+                echo "$(date): second start screen replaced" >> "$L"
+                mv "$D/boot_animation.png" "$D/boot_animation.png.done"
+            fi
+            sync
+        fi
+    ) </dev/null >/dev/null 2>&1 &
+    ;;
+  *)
+    ;;
+esac
+
+exit 0

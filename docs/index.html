@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Turn any picture into the power-on boot logo of the xDuoo X3II.">
+<title>X3II Boot Logo Maker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+html, body { margin: 0; } img { max-width: 100%; }
+/* Layout: workbench — a to-scale device on the left, the controls that shape its screen on the right, install notes below. */
+:root {
+  --bg: #ECEEF0;
+  --surface: #FFFFFF;
+  --ink: #15181B;
+  --muted: #59616A;
+  --line: #D3D8DD;
+  --accent: #9A6B1F;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #F3E7D2;
+  --ok: #2F7A4B;
+  --warn: #9B3D2A;
+  --device: #1B1C1F;
+  --device-edge: #34363B;
+  --device-btn: #26282C;
+  --font-ui: "Instrument Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111315; --surface: #1A1D20; --ink: #E7EAED; --muted: #99A2AB; --line: #2E3338;
+    --accent: #D7A64D; --accent-ink: #1A1408; --accent-soft: #33281A; --ok: #6CC08B; --warn: #E48C77;
+    --device: #0A0B0C; --device-edge: #3A3D42; --device-btn: #1C1E21;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111315; --surface: #1A1D20; --ink: #E7EAED; --muted: #99A2AB; --line: #2E3338;
+  --accent: #D7A64D; --accent-ink: #1A1408; --accent-soft: #33281A; --ok: #6CC08B; --warn: #E48C77;
+  --device: #0A0B0C; --device-edge: #3A3D42; --device-btn: #1C1E21;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 15px; line-height: 1.5;
+}
+.wrap {
+  max-width: 1040px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+  display: grid; gap: 28px;
+}
+header { display: grid; gap: 6px; }
+h1 { font-size: 1.75rem; line-height: 1.15; margin: 0; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 1.05rem; margin: 0; font-weight: 600; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 64ch; }
+.spec { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.bench { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 760px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+
+/* the player, drawn to the real 2" panel proportions */
+.stage { display: grid; justify-items: center; gap: 12px; }
+.device {
+  background: var(--device); border: 1px solid var(--device-edge); border-radius: 22px;
+  padding: 22px 20px 26px; display: grid; justify-items: center; gap: 22px;
+  box-shadow: 0 18px 40px -22px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+  width: 100%; max-width: 284px;
+}
+.screen { position: relative; width: 240px; max-width: 100%; aspect-ratio: 3 / 4; border-radius: 3px; overflow: hidden; background: #000; box-shadow: 0 0 0 6px #000; }
+.screen canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+.screen canvas.dragging { cursor: grabbing; }
+.keys { display: grid; grid-template-columns: repeat(3, auto); align-items: center; gap: 14px; }
+.keypair { display: grid; gap: 8px; }
+.key { width: 30px; height: 30px; border-radius: 50%; background: var(--device-btn); border: 1px solid var(--device-edge); }
+.key.big { width: 50px; height: 50px; }
+.tag {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+}
+.hint { font-size: 13px; color: var(--muted); margin: 0; text-align: center; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; display: grid; gap: 22px; min-width: 0; }
+.group { display: grid; gap: 10px; }
+.label { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+
+.drop {
+  border: 1.5px dashed var(--line); border-radius: var(--r); padding: 18px; display: grid; gap: 8px; justify-items: start;
+  transition: border-color .15s, background .15s;
+}
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop p { margin: 0; color: var(--muted); font-size: 13.5px; }
+.filename { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
+
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 14px; padding: 7px 14px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+input[type="range"] { width: min(260px, 100%); accent-color: var(--accent); }
+input[type="color"] { width: 40px; height: 32px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 2px; cursor: pointer; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; cursor: pointer; }
+.check input { margin-top: 3px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+.check small { display: block; color: var(--muted); font-size: 13px; }
+
+button.btn, label.btn {
+  font: inherit; font-size: 14px; font-weight: 600; border-radius: 8px; padding: 9px 16px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); display: inline-flex; align-items: center; gap: 8px;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); padding: 11px 20px; font-size: 15px; }
+button.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn:focus-visible, .seg button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.status { font-size: 13.5px; margin: 0; min-height: 1.4em; }
+.status.ok { color: var(--ok); }
+.status.err { color: var(--warn); }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.lower { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 760px) { .lower { grid-template-columns: minmax(0, 1fr); } }
+.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; counter-reset: s; }
+.steps li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; counter-increment: s; }
+.steps li::before {
+  content: counter(s); width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent);
+  display: grid; place-items: center; font-weight: 700; font-size: 13px;
+}
+.steps p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.steps strong { color: var(--ink); font-weight: 600; }
+a { color: var(--accent); text-underline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--accent-soft); color: var(--ink); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.check-bin { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; align-items: start; }
+.check-bin canvas { width: 120px; aspect-ratio: 3 / 4; background: #000; border-radius: 3px; display: block; max-width: 100%; }
+.muted { color: var(--muted); font-size: 14px; margin: 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>X3II Boot Logo Maker</h1>
+    <p class="lede">Turns any picture into the power-on logo for the xDuoo X3II. The download is a <code>bootlogo</code> folder for the SD card; the player writes it into its logo flash on the next start.</p>
+    <span class="spec">240 × 320 px · 32-bit B G R X · 307 200 bytes · logo partition @ 0x80000</span>
+  </header>
+
+  <section class="bench">
+    <div class="stage">
+      <div class="device" aria-label="Preview on the player">
+        <div class="screen"><canvas id="out" width="240" height="320" aria-label="Boot logo preview, drag to reposition"></canvas></div>
+        <div class="keys" aria-hidden="true">
+          <div class="keypair"><span class="key"></span><span class="key"></span></div>
+          <span class="key big"></span>
+          <div class="keypair"><span class="key"></span><span class="key"></span></div>
+        </div>
+      </div>
+      <span class="tag" id="sampleTag">Sample image</span>
+      <p class="hint">Drag the picture to move it. Shown at actual pixel size.</p>
+    </div>
+
+    <div class="panel">
+      <div class="group">
+        <span class="label">Picture</span>
+        <div class="drop" id="drop">
+          <label class="btn" for="file">Choose picture…</label>
+          <input class="vh" type="file" id="file" accept="image/*">
+          <p>…or drop it here, or paste it. PNG, JPG, WebP or GIF; HEIC works in Safari only.</p>
+          <span class="filename" id="fname">No picture chosen, showing a sample.</span>
+        </div>
+      </div>
+
+      <div class="group">
+        <span class="label">Framing</span>
+        <div class="row">
+          <div class="seg" role="group" aria-label="Framing">
+            <button type="button" id="mFill" aria-pressed="true">Fill screen</button>
+            <button type="button" id="mFit" aria-pressed="false">Fit whole picture</button>
+          </div>
+          <button type="button" class="btn" id="center">Re-center</button>
+        </div>
+        <div class="row">
+          <label for="zoom" class="muted">Zoom</label>
+          <input type="range" id="zoom" min="100" max="400" step="1" value="100">
+          <span class="spec" id="zoomVal">100%</span>
+        </div>
+        <div class="row">
+          <label for="bg" class="muted">Background</label>
+          <input type="color" id="bg" value="#000000">
+          <span class="muted">shows where the picture doesn't cover the screen</span>
+        </div>
+      </div>
+
+      <div class="group">
+        <span class="label">Options</span>
+        <label class="check"><input type="checkbox" id="anim" checked>
+          <span>Also replace the second start screen
+            <small>The plain “xDuoo” screen that appears while the player software loads.</small></span></label>
+        <label class="check"><input type="checkbox" id="swap">
+          <span>Swap red and blue
+            <small>Leave off. Only turn on if the logo shows up on the player with red and blue swapped.</small></span></label>
+      </div>
+
+      <div class="group">
+        <div class="row">
+          <button type="button" class="btn primary" id="dl">Download bootlogo.zip</button>
+          <span class="spec" id="zipInfo"></span>
+        </div>
+        <p class="status" id="status" role="status"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="lower">
+    <div class="panel">
+      <h2>Putting it on the player</h2>
+      <ol class="steps">
+        <li><div><strong>Once: install the firmware with the boot-logo hook.</strong>
+          <p>It is SinuXVR's custom firmware plus a small start-up script, built with the script in the <a href="https://github.com/akod1ng/xduoo-x3ii-bootlogo">xduoo-x3ii-bootlogo</a> project. Copy that <code>update.upt</code> to the root of the SD card, then System settings → Firmware update. Your themes in <code>.themes</code> stay.</p></div></li>
+        <li><div><strong>Unzip <code>bootlogo.zip</code> to the root of the SD card.</strong>
+          <p>You should end up with <code>bootlogo/logo.bin</code> (and <code>boot_animation.png</code> if ticked) on the card.</p></div></li>
+        <li><div><strong>Start the player, wait half a minute, restart.</strong>
+          <p>The first start writes the logo and renames the file to <code>logo.bin.done</code>. Don't switch off during those seconds. The next power-on shows your picture. If not, read <code>bootlogo/flash_log.txt</code>.</p></div></li>
+      </ol>
+      <p class="muted">To go back: rename <code>bootlogo/original_logo.bin</code> (saved there on the first run) to <code>logo.bin</code> and restart.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Check a .bin file</h2>
+      <p class="muted">Open <code>original_logo.bin</code> from the card to confirm the colours decode correctly. xDuoo's stock logo should show gold sparkles on black. If it looks blue, tick “Swap red and blue” before downloading.</p>
+      <div class="check-bin">
+        <canvas id="binView" width="240" height="320" aria-label="Decoded .bin preview"></canvas>
+        <div class="group">
+          <label class="btn" for="binFile">Open .bin…</label>
+          <input class="vh" type="file" id="binFile" accept=".bin,application/octet-stream">
+          <span class="filename" id="binName">Nothing opened yet.</span>
+          <span class="spec" id="binInfo"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const W = 240, H = 320, LOGO_BYTES = W * H * 4;
+  const out = document.getElementById('out');
+  const ctx = out.getContext('2d', { willReadFrequently: true });
+  const $ = id => document.getElementById(id);
+  const st = { levels: null, w: 0, h: 0, sample: true, mode: 'fill', zoom: 1, ox: 0, oy: 0, bg: '#000000', name: '' };
+
+  // ---------- sample picture (clearly labelled) ----------
+  function makeSample() {
+    const c = document.createElement('canvas'); c.width = 480; c.height = 640;
+    const g = c.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 0, 640);
+    grd.addColorStop(0, '#1d2a3a'); grd.addColorStop(1, '#07090c');
+    g.fillStyle = grd; g.fillRect(0, 0, 480, 640);
+    for (let i = 0; i < 14; i++) {
+      g.beginPath(); g.strokeStyle = `rgba(215,166,77,${0.08 + i * 0.035})`; g.lineWidth = 2;
+      g.arc(240, 270, 40 + i * 16, Math.PI * 0.85, Math.PI * 2.15); g.stroke();
+    }
+    g.fillStyle = '#e9d3a3'; g.textAlign = 'center';
+    g.font = '600 58px "Instrument Sans", system-ui, sans-serif'; g.fillText('SAMPLE', 240, 470);
+    g.fillStyle = 'rgba(233,211,163,.7)'; g.font = '500 26px "Instrument Sans", system-ui, sans-serif';
+    g.fillText('drop your picture', 240, 515);
+    return c;
+  }
+
+  // successive halving so big photos downscale cleanly
+  function buildLevels(src, w, h) {
+    const levels = [{ img: src, w, h }];
+    let cw = w, ch = h, cur = src;
+    while (cw > 2 * W * 2 && ch > 2 * H * 2) {
+      const nw = Math.round(cw / 2), nh = Math.round(ch / 2);
+      const c = document.createElement('canvas'); c.width = nw; c.height = nh;
+      const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(cur, 0, 0, nw, nh);
+      levels.push({ img: c, w: nw, h: nh }); cur = c; cw = nw; ch = nh;
+    }
+    return levels;
+  }
+
+  function geometry() {
+    const base = st.mode === 'fill' ? Math.max(W / st.w, H / st.h) : Math.min(W / st.w, H / st.h);
+    const s = base * st.zoom, dw = st.w * s, dh = st.h * s;
+    const mx = Math.abs(dw - W) / 2, my = Math.abs(dh - H) / 2;
+    st.ox = Math.max(-mx, Math.min(mx, st.ox)); st.oy = Math.max(-my, Math.min(my, st.oy));
+    return { s, dw, dh, x: (W - dw) / 2 + st.ox, y: (H - dh) / 2 + st.oy };
+  }
+
+  function render() {
+    if (!st.levels) return;
+    const { s, dw, dh, x, y } = geometry();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = st.bg; ctx.fillRect(0, 0, W, H);
+    let lv = st.levels[0];
+    for (const L of st.levels) { if (dw <= L.w) lv = L; }
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(lv.img, x, y, dw, dh);
+    $('zoomVal').textContent = Math.round(st.zoom * 100) + '%';
+  }
+
+  function setSource(src, w, h, name, sample) {
+    st.levels = buildLevels(src, w, h); st.w = w; st.h = h; st.sample = sample; st.name = name;
+    st.zoom = 1; st.ox = 0; st.oy = 0; $('zoom').value = 100;
+    $('sampleTag').hidden = !sample;
+    $('fname').textContent = sample ? 'No picture chosen, showing a sample.' : `${name} · ${w} × ${h} px`;
+    render(); setStatus('');
+  }
+
+  function loadFile(file) {
+    if (!file) return;
+    if (!/^image\//.test(file.type) && !/\.(png|jpe?g|webp|gif|heic|heif|bmp|avif)$/i.test(file.name)) {
+      setStatus('That file isn’t a picture. Use PNG, JPG, WebP or GIF.', 'err'); return;
+    }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { setSource(img, img.naturalWidth, img.naturalHeight, file.name, false); URL.revokeObjectURL(url); };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      setStatus(/heic|heif/i.test(file.name) ? 'This browser can’t read HEIC. Export the picture as JPG or PNG first.' : 'Couldn’t read that picture. Try saving it as PNG or JPG.', 'err');
+    };
+    img.src = url;
+  }
+
+  // ---------- inputs ----------
+  $('file').addEventListener('change', e => loadFile(e.target.files[0]));
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => loadFile(e.dataTransfer.files[0]));
+  document.addEventListener('paste', e => {
+    const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+    if (item) loadFile(item.getAsFile());
+  });
+
+  function setMode(m) {
+    st.mode = m; $('mFill').setAttribute('aria-pressed', m === 'fill'); $('mFit').setAttribute('aria-pressed', m === 'fit');
+    st.ox = 0; st.oy = 0; render();
+  }
+  $('mFill').addEventListener('click', () => setMode('fill'));
+  $('mFit').addEventListener('click', () => setMode('fit'));
+  $('center').addEventListener('click', () => { st.ox = 0; st.oy = 0; render(); });
+  $('zoom').addEventListener('input', e => { st.zoom = e.target.value / 100; render(); });
+  $('bg').addEventListener('input', e => { st.bg = e.target.value; render(); });
+
+  // drag to pan
+  let drag = null;
+  out.addEventListener('pointerdown', e => {
+    out.setPointerCapture(e.pointerId); out.classList.add('dragging');
+    const k = W / out.getBoundingClientRect().width;
+    drag = { x: e.clientX, y: e.clientY, ox: st.ox, oy: st.oy, k };
+  });
+  out.addEventListener('pointermove', e => {
+    if (!drag) return;
+    st.ox = drag.ox + (e.clientX - drag.x) * drag.k; st.oy = drag.oy + (e.clientY - drag.y) * drag.k; render();
+  });
+  const endDrag = () => { drag = null; out.classList.remove('dragging'); };
+  out.addEventListener('pointerup', endDrag); out.addEventListener('pointercancel', endDrag);
+  out.addEventListener('wheel', e => {
+    e.preventDefault();
+    st.zoom = Math.max(1, Math.min(4, st.zoom * (e.deltaY < 0 ? 1.05 : 1 / 1.05)));
+    $('zoom').value = Math.round(st.zoom * 100); render();
+  }, { passive: false });
+
+  // ---------- encoders ----------
+  function logoBytes() {
+    const px = ctx.getImageData(0, 0, W, H).data;           // RGBA, already opaque
+    const b = new Uint8Array(LOGO_BYTES), swap = $('swap').checked;
+    for (let i = 0; i < W * H; i++) {
+      const r = px[i * 4], g = px[i * 4 + 1], bl = px[i * 4 + 2], o = i * 4;
+      b[o] = swap ? r : bl; b[o + 1] = g; b[o + 2] = swap ? bl : r; b[o + 3] = 0xFF;
+    }
+    return b;
+  }
+
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+
+  // minimal ZIP writer (stored, no compression)
+  function makeZip(files) {
+    const enc = new TextEncoder(), parts = [], central = [];
+    const d = new Date(), dosTime = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    const dosDate = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    let offset = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name), data = f.data, crc = crc32(data), isDir = f.name.endsWith('/');
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+      lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true); lh.setUint32(14, crc, true);
+      lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+      parts.push(new Uint8Array(lh.buffer), name, data);
+      const ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+      ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true); ch.setUint32(16, crc, true);
+      ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true);
+      ch.setUint32(38, isDir ? 0x10 : 0, true); ch.setUint32(42, offset, true);
+      central.push(new Uint8Array(ch.buffer), name);
+      offset += 30 + name.length + data.length;
+    }
+    const cdSize = central.reduce((a, p) => a + p.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
+  }
+
+  function pngBytes() {
+    return new Promise((res, rej) => out.toBlob(b => b ? b.arrayBuffer().then(a => res(new Uint8Array(a)), rej) : rej(new Error('png')), 'image/png'));
+  }
+
+  function setStatus(msg, kind) { const s = $('status'); s.textContent = msg; s.className = 'status' + (kind ? ' ' + kind : ''); }
+
+  // ---------- download ----------
+  let downloads = null;
+  const dlBtn = $('dl');
+  dlBtn.disabled = true;
+  // inside Claude the page asks the viewer through the downloads capability;
+  // opened as a normal web page (e.g. GitHub Pages) it uses a plain download link
+  const inClaude = !!(window.claude && window.claude.use);
+  const plainSave = {
+    save: async ({ filename, data }) => {
+      const url = URL.createObjectURL(data), a = document.createElement('a');
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      return { status: 'saved' };
+    }
+  };
+  (inClaude ? window.claude.use('downloads') : Promise.resolve(plainSave)).then(ns => {
+    downloads = ns;
+    if (ns) { dlBtn.disabled = false; }
+    else { setStatus('Downloads aren’t available in this view. Open this page in claude.ai or the Claude app to save the file.', 'err'); }
+  });
+
+  dlBtn.addEventListener('click', async () => {
+    if (!downloads) return;
+    if (st.sample) { setStatus('That’s still the sample picture. Choose your own picture first.', 'err'); return; }
+    dlBtn.disabled = true;
+    try {
+      const files = [{ name: 'bootlogo/', data: new Uint8Array(0) }, { name: 'bootlogo/logo.bin', data: logoBytes() }];
+      if ($('anim').checked) files.push({ name: 'bootlogo/boot_animation.png', data: await pngBytes() });
+      const zip = makeZip(files);
+      $('zipInfo').textContent = `${(zip.size / 1024).toFixed(0)} KB`;
+      await downloads.save({ filename: 'bootlogo.zip', data: zip });
+      setStatus('Saved bootlogo.zip. Unzip it to the root of the SD card.', 'ok');
+    } catch (err) {
+      const code = err && err.code;
+      if (code === 'declined') setStatus('Download cancelled.', '');
+      else if (code === 'rate_limited') setStatus('A save prompt is already open. Finish that one first.', 'err');
+      else setStatus('The file couldn’t be saved here (' + (code || 'error') + ').', 'err');
+    } finally { dlBtn.disabled = !downloads; }
+  });
+
+  // ---------- .bin checker ----------
+  const bv = $('binView').getContext('2d');
+  bv.fillStyle = '#000'; bv.fillRect(0, 0, W, H);
+  let lastBin = null;
+  function drawBin() {
+    if (!lastBin) return;
+    const img = bv.createImageData(W, H), swap = $('swap').checked;
+    let alphaSet = new Set();
+    for (let i = 0; i < W * H; i++) {
+      const o = i * 4, b0 = lastBin[o], g = lastBin[o + 1], b2 = lastBin[o + 2];
+      img.data[o] = swap ? b0 : b2; img.data[o + 1] = g; img.data[o + 2] = swap ? b2 : b0; img.data[o + 3] = 255;
+      if (alphaSet.size < 4) alphaSet.add(lastBin[o + 3]);
+    }
+    bv.putImageData(img, 0, 0);
+    $('binInfo').textContent = `decoded as ${swap ? 'R G B X' : 'B G R X'} · 4th byte: ${[...alphaSet].map(v => '0x' + v.toString(16).padStart(2, '0')).join(', ')}${alphaSet.size >= 4 ? ', …' : ''}`;
+  }
+  $('binFile').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    const buf = new Uint8Array(await f.arrayBuffer());
+    if (buf.length < LOGO_BYTES) { $('binName').textContent = `${f.name} is ${buf.length.toLocaleString()} bytes, a logo needs ${LOGO_BYTES.toLocaleString()}.`; return; }
+    lastBin = buf.subarray(0, LOGO_BYTES);
+    $('binName').textContent = `${f.name} · ${buf.length.toLocaleString()} bytes${buf.length > LOGO_BYTES ? ' (first 307 200 used)' : ''}`;
+    drawBin();
+  });
+  $('swap').addEventListener('change', drawBin);
+
+  // start with the sample once fonts are in, so its lettering renders properly
+  const start = () => { if (st.levels && !st.sample) return; const s = makeSample(); setSource(s, s.width, s.height, 'sample', true); };
+  (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(start, start);
+  // ensure something is visible immediately even if fonts take long
+  setTimeout(() => { if (!st.levels) start(); }, 800);
+})();
+</script>
+</body>
+</html>
