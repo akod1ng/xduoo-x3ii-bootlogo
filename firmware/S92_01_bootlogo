@@ -8,8 +8,12 @@
 #                                   (renamed to logo.bin.done afterwards)
 #   bootlogo/boot_animation.png  -> replaces the second start screen
 #                                   (renamed to boot_animation.png.done)
-# A log is written to bootlogo/flash_log.txt, backups of the original logo
+#   bootlogo/shutdown_animation/animation00.png ... animation12.png
+#                                -> replace the 13 frames shown when switching off
+#                                   (folder renamed to shutdown_animation.done)
+# A log is written to bootlogo/flash_log.txt, backups of the originals
 # are written to bootlogo/ as well. Without that folder nothing happens.
+# Writing logo.bin needs the patched kernel from tools/patch_kernel.py.
 # Runs in the background so start-up is not delayed. Always exits 0.
 
 case "$1" in
@@ -41,6 +45,22 @@ case "$1" in
                 echo "$(date): second start screen replaced" >> "$L"
                 mv "$D/boot_animation.png" "$D/boot_animation.png.done"
             fi
+            sync
+        fi
+
+        if [ -d "$D/shutdown_animation" ]; then
+            S=/usr/resource/gui/shutdown_animation
+            [ -d "$S.orig" ] || cp -rp "$S" "$S.orig"
+            [ -d "$D/original_shutdown_animation" ] || cp -r "$S.orig" "$D/original_shutdown_animation"
+            n=0
+            for i in 00 01 02 03 04 05 06 07 08 09 10 11 12; do
+                f="animation$i.png"
+                if [ -f "$D/shutdown_animation/$f" ] && cp "$D/shutdown_animation/$f" "$S/$f"; then
+                    n=$((n + 1))
+                fi
+            done
+            echo "$(date): shutdown animation: $n of 13 frames replaced" >> "$L"
+            mv "$D/shutdown_animation" "$D/shutdown_animation.done"
             sync
         fi
     ) </dev/null >/dev/null 2>&1 &

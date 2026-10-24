@@ -144,7 +144,7 @@ code { font-family: var(--font-mono); font-size: .88em; background: var(--accent
   <header>
     <h1>X3II Boot Logo Maker</h1>
     <p class="lede">Turns any picture into the power-on logo for the xDuoo X3II. The download is a <code>bootlogo</code> folder for the SD card; the player writes it into its logo flash on the next start.</p>
-    <span class="spec">240 × 320 px · 32-bit B G R X · 307 200 bytes · logo partition @ 0x80000</span>
+    <span class="spec">240 × 320 px · 32-bit B G R 0 · 307 200 bytes · logo partition @ 0x80000</span>
   </header>
 
   <section class="bench">
@@ -198,6 +198,9 @@ code { font-family: var(--font-mono); font-size: .88em; background: var(--accent
         <label class="check"><input type="checkbox" id="anim" checked>
           <span>Also replace the second start screen
             <small>The plain “xDuoo” screen that appears while the player software loads.</small></span></label>
+        <label class="check"><input type="checkbox" id="shut" checked>
+          <span>Also replace the shutdown animation
+            <small>Your picture fades to black over 13 frames when you switch the player off.</small></span></label>
         <label class="check"><input type="checkbox" id="swap">
           <span>Swap red and blue
             <small>Leave off. Only turn on if the logo shows up on the player with red and blue swapped.</small></span></label>
@@ -218,9 +221,9 @@ code { font-family: var(--font-mono); font-size: .88em; background: var(--accent
       <h2>Putting it on the player</h2>
       <ol class="steps">
         <li><div><strong>Once: install the firmware with the boot-logo hook.</strong>
-          <p>It is SinuXVR's custom firmware plus a small start-up script, built with the script in the <a href="https://github.com/akod1ng/xduoo-x3ii-bootlogo">xduoo-x3ii-bootlogo</a> project. Copy that <code>update.upt</code> to the root of the SD card, then System settings → Firmware update. Your themes in <code>.themes</code> stay.</p></div></li>
+          <p>It is SinuXVR's custom firmware plus a start-up script and a 4-byte kernel patch that lets it write the logo, built with the script in the <a href="https://github.com/akod1ng/xduoo-x3ii-bootlogo">xduoo-x3ii-bootlogo</a> project. Copy that <code>update.upt</code> to the root of the SD card, then System settings → Firmware update. Your themes in <code>.themes</code> stay.</p></div></li>
         <li><div><strong>Unzip <code>bootlogo.zip</code> to the root of the SD card.</strong>
-          <p>You should end up with <code>bootlogo/logo.bin</code> (and <code>boot_animation.png</code> if ticked) on the card.</p></div></li>
+          <p>You should end up with <code>bootlogo/logo.bin</code> on the card, plus <code>boot_animation.png</code> and a <code>shutdown_animation</code> folder if ticked.</p></div></li>
         <li><div><strong>Start the player, wait half a minute, restart.</strong>
           <p>The first start writes the logo and renames the file to <code>logo.bin.done</code>. Don't switch off during those seconds. The next power-on shows your picture. If not, read <code>bootlogo/flash_log.txt</code>.</p></div></li>
       </ol>
@@ -228,8 +231,8 @@ code { font-family: var(--font-mono); font-size: .88em; background: var(--accent
     </div>
 
     <div class="panel">
-      <h2>Check a .bin file</h2>
-      <p class="muted">Open <code>original_logo.bin</code> from the card to confirm the colours decode correctly. xDuoo's stock logo should show gold sparkles on black. If it looks blue, tick “Swap red and blue” before downloading.</p>
+      <h2>Look inside a .bin file</h2>
+      <p class="muted">Open any logo file, for example <code>original_logo.bin</code> that the player saves on the card, to see the picture it holds. xDuoo's own logo is grey sparkles with “xDuoo” on black; the screen only makes it look gold during start-up.</p>
       <div class="check-bin">
         <canvas id="binView" width="240" height="320" aria-label="Decoded .bin preview"></canvas>
         <div class="group">
@@ -371,7 +374,7 @@ code { font-family: var(--font-mono); font-size: .88em; background: var(--accent
     const b = new Uint8Array(LOGO_BYTES), swap = $('swap').checked;
     for (let i = 0; i < W * H; i++) {
       const r = px[i * 4], g = px[i * 4 + 1], bl = px[i * 4 + 2], o = i * 4;
-      b[o] = swap ? r : bl; b[o + 1] = g; b[o + 2] = swap ? bl : r; b[o + 3] = 0xFF;
+      b[o] = swap ? r : bl; b[o + 1] = g; b[o + 2] = swap ? bl : r; // 4th byte stays 0, as in xDuoo's own logo
     }
     return b;
   }
@@ -407,8 +410,20 @@ code { font-family: var(--font-mono); font-size: .88em; background: var(--accent
     return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
   }
 
-  function pngBytes() {
-    return new Promise((res, rej) => out.toBlob(b => b ? b.arrayBuffer().then(a => res(new Uint8Array(a)), rej) : rej(new Error('png')), 'image/png'));
+  function pngBytes(canvas = out) {
+    return new Promise((res, rej) => canvas.toBlob(b => b ? b.arrayBuffer().then(a => res(new Uint8Array(a)), rej) : rej(new Error('png')), 'image/png'));
+  }
+
+  // 13 frames from the full picture to black, like xDuoo's own shutdown animation
+  async function shutdownFrames() {
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d'), frames = [];
+    for (let i = 0; i < 13; i++) {
+      g.globalAlpha = 1; g.drawImage(out, 0, 0);
+      g.globalAlpha = i / 12; g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+      frames.push({ name: `bootlogo/shutdown_animation/animation${String(i).padStart(2, '0')}.png`, data: await pngBytes(c) });
+    }
+    return frames;
   }
 
   function setStatus(msg, kind) { const s = $('status'); s.textContent = msg; s.className = 'status' + (kind ? ' ' + kind : ''); }
@@ -441,6 +456,7 @@ code { font-family: var(--font-mono); font-size: .88em; background: var(--accent
     try {
       const files = [{ name: 'bootlogo/', data: new Uint8Array(0) }, { name: 'bootlogo/logo.bin', data: logoBytes() }];
       if ($('anim').checked) files.push({ name: 'bootlogo/boot_animation.png', data: await pngBytes() });
+      if ($('shut').checked) files.push({ name: 'bootlogo/shutdown_animation/', data: new Uint8Array(0) }, ...await shutdownFrames());
       const zip = makeZip(files);
       $('zipInfo').textContent = `${(zip.size / 1024).toFixed(0)} KB`;
       await downloads.save({ filename: 'bootlogo.zip', data: zip });

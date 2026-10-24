@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Make an xDuoo X3II boot logo from any picture (command-line version of docs/index.html).
 
-    python3 tools/make_logo.py picture.jpg              -> bootlogo/logo.bin + bootlogo/boot_animation.png
+    python3 tools/make_logo.py picture.jpg              -> bootlogo/logo.bin, boot_animation.png, shutdown_animation/
     python3 tools/make_logo.py picture.png --fit --bg "#202020"
     python3 tools/make_logo.py --show original_logo.bin  -> original_logo.png (decode a .bin to check it)
 
-The logo is 240 x 320 pixels, 4 bytes per pixel in B, G, R, X order (307 200 bytes),
+The logo is 240 x 320 pixels, 4 bytes per pixel in B, G, R, 0 order (307 200 bytes),
 exactly what the bootloader copies from the "logo" flash partition into the screen.
 Copy the resulting bootlogo folder to the root of the SD card. Needs Pillow.
 """
@@ -35,7 +35,7 @@ def frame(img, fit, bg):
 
 def to_logo(rgb, swap):
     raw = rgb.tobytes()                      # R G B R G B ...
-    out = bytearray(b"\xff" * LOGO_BYTES)    # 4th byte stays 0xFF
+    out = bytearray(LOGO_BYTES)              # 4th byte stays 0x00, as in xDuoo's own logo
     out[0::4] = raw[0::3] if swap else raw[2::3]
     out[1::4] = raw[1::3]
     out[2::4] = raw[2::3] if swap else raw[0::3]
@@ -61,6 +61,7 @@ def main():
     ap.add_argument("--bg", default="#000000", help="background colour where the picture doesn't cover (default black)")
     ap.add_argument("--swap", action="store_true", help="swap red and blue (only if colours come out wrong)")
     ap.add_argument("--no-animation", action="store_true", help="don't write boot_animation.png")
+    ap.add_argument("--no-shutdown", action="store_true", help="don't write the shutdown_animation frames")
     ap.add_argument("--show", metavar="BIN", help="decode a logo .bin to a PNG instead")
     a = ap.parse_args()
 
@@ -82,7 +83,22 @@ def main():
     if not a.no_animation:
         rgb.save(os.path.join(a.out, "boot_animation.png"))
         print(f"wrote {os.path.join(a.out, 'boot_animation.png')}")
+    if not a.no_shutdown:
+        sd = os.path.join(a.out, "shutdown_animation")
+        os.makedirs(sd, exist_ok=True)
+        black = Image.new("RGB", (W, H))
+        for i, step in enumerate(fade_frames(rgb, black)):
+            step.save(os.path.join(sd, f"animation{i:02d}.png"))
+        print(f"wrote {sd}/animation00.png ... animation{SHUTDOWN_FRAMES - 1:02d}.png")
     print("copy the folder to the root of the SD card and restart the player")
+
+
+SHUTDOWN_FRAMES = 13
+
+
+def fade_frames(rgb, black):
+    """13 frames from the full picture down to black, like xDuoo's own shutdown animation."""
+    return [Image.blend(rgb, black, i / (SHUTDOWN_FRAMES - 1)) for i in range(SHUTDOWN_FRAMES)]
 
 
 if __name__ == "__main__":

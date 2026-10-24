@@ -71,5 +71,25 @@ check "$(py 'import sys;t=sys.argv[1];print(open(t+"/dev/mtd1.img","rb").read()=
 echo "no logo partition"; reset; grep -v logo "$T/proc_mtd" > "$T/p2"; mv "$T/p2" "$T/proc_mtd"
 run new_logo.bin bk >/dev/null; check $? 1 "refused"
 
+echo "start-up hook with logo, second screen and shutdown frames"; reset
+R="$T/root"; mkdir -p "$R/sd/bootlogo/shutdown_animation" "$R/gui/boot_animation" "$R/gui/shutdown_animation"
+echo "/dev/mmcblk0p1 /mnt/sd_0 vfat rw 0 0" > "$R/mounts"
+cp "$T/new_logo.bin" "$R/sd/bootlogo/logo.bin"
+echo NEWBOOT > "$R/sd/bootlogo/boot_animation.png"; echo OLDBOOT > "$R/gui/boot_animation/animation00.png"
+for i in 00 01 02 03 04 05 06 07 08 09 10 11 12; do
+    echo "NEW$i" > "$R/sd/bootlogo/shutdown_animation/animation$i.png"; echo "OLD$i" > "$R/gui/shutdown_animation/animation$i.png"
+done
+sed -e "s#/proc/mounts#$R/mounts#" -e "s#D=/mnt/sd_0/bootlogo#D=$R/sd/bootlogo#" \
+    -e "s#/usr/bin/bootlogo_flash.sh#$T/flash.sh#" -e "s#/usr/resource/gui/#$R/gui/#g" \
+    "$REPO/firmware/S92_01_bootlogo" > "$T/hook.sh"
+(cd "$T" && env PATH="$TPATH" $SH hook.sh start); check $? 0 "hook exit code"
+for _ in $(seq 1 30); do [ -d "$R/sd/bootlogo/shutdown_animation.done" ] && break; sleep 0.5; done
+check "$([ -f "$R/sd/bootlogo/logo.bin.done" ] && echo yes)" yes "logo.bin renamed to .done"
+check "$(py 'import sys;t=sys.argv[1];print(open(t+"/dev/mtd1.img","rb").read()[:307200]==open(t+"/new_logo.bin","rb").read())')" True "logo written by hook"
+check "$(cat "$R/gui/boot_animation/animation00.png")" NEWBOOT "second screen replaced"
+check "$(cat "$R/gui/shutdown_animation/animation00.png")$(cat "$R/gui/shutdown_animation/animation12.png")" NEW00NEW12 "shutdown frames replaced"
+check "$(cat "$R/sd/bootlogo/original_shutdown_animation/animation05.png")" OLD05 "original shutdown frames backed up"
+check "$(grep -c '13 of 13 frames' "$R/sd/bootlogo/flash_log.txt")" 1 "log mentions 13 frames"
+
 echo
 if [ $fails = 0 ]; then echo "all tests passed ($SH)"; else echo "$fails test(s) failed"; exit 1; fi

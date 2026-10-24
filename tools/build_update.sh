@@ -9,9 +9,10 @@
 # root filesystem:
 #     /usr/bin/bootlogo_flash.sh
 #     /etc/init.d/S92_01_bootlogo
-# Kernel and bootloader are copied unchanged; only the rootfs md5 in
-# update.txt is updated. Run on Linux, as root (the image keeps the
-# original file owners, which needs root to reproduce).
+# and a kernel whose flash driver may write the logo partition
+# (tools/patch_kernel.py, 4 bytes changed). The bootloader is copied
+# unchanged; the md5s in update.txt are recomputed. Run on Linux, as root
+# (the image keeps the original file owners, which needs root to reproduce).
 #
 # needs: mkfs.ubifs (mtd-utils), genisoimage, ubireader_extract_files
 #        (pip install ubi_reader), bsdtar (libarchive-tools) or 7z, md5sum
@@ -26,7 +27,7 @@ OUT=$(realpath -m "${2:-update_bootlogo.upt}")
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 [ -f "$IN" ] || die "not found: $IN"
 [ "$(id -u)" = 0 ] || die "run as root (sudo), needed to keep file ownership inside the image"
-for t in mkfs.ubifs genisoimage ubireader_extract_files md5sum; do
+for t in mkfs.ubifs genisoimage ubireader_extract_files md5sum python3; do
     command -v "$t" >/dev/null || die "missing tool: $t"
 done
 
@@ -63,16 +64,25 @@ if grep -q $'\r' "$W/rootfs/usr/bin/bootlogo_flash.sh" "$W/rootfs/etc/init.d/S92
     die "the firmware scripts have Windows line endings, convert them to LF first"
 fi
 
-echo "4/5 rebuilding system.ubi"
+echo "4/5 rebuilding system.ubi and patching the kernel"
 # same parameters as the original image: 2 KiB pages, 128 KiB blocks, LZO
 mkfs.ubifs -x lzo -d "$W/rootfs" -e 0x1F000 -c 1024 -m 0x800 -o "$W/iso/system.ubi"
-MD5=$(md5sum "$W/iso/system.ubi" | cut -d' ' -f1)
-awk -v md5="$MD5" '
-    /^[a-z_]+=\{/ { sec = $1 }
-    sec ~ /^rootfs=/ && /md5=/ { sub(/md5=[0-9a-fA-F]+/, "md5=" md5) }
-    { print }
-' "$W/iso/update.txt" > "$W/update.txt.new"
-mv "$W/update.txt.new" "$W/iso/update.txt"
+# lift the driver's 16 MiB write/erase guard down to the end of the bootloader
+python3 "$REPO/tools/patch_kernel.py" "$W/iso/uimage.bin" "$W/uimage.patched" | sed 's/^/   /'
+mv "$W/uimage.patched" "$W/iso/uimage.bin"
+# recompute every md5 in update.txt
+python3 - "$W/iso" <<'EOF'
+import hashlib, re, sys
+d = sys.argv[1]
+txt = open(f"{d}/update.txt").read()
+def fix(block):
+    m = re.search(r"file_path=autoupdate/(\S+)", block.group(0))
+    if not m:
+        return block.group(0)
+    md5 = hashlib.md5(open(f"{d}/{m.group(1)}", "rb").read()).hexdigest()
+    return re.sub(r"md5=[0-9a-fA-F]+", "md5=" + md5, block.group(0))
+open(f"{d}/update.txt", "w").write(re.sub(r"\w+=\{.*?\}", fix, txt, flags=re.S))
+EOF
 
 echo "5/5 packing $OUT"
 genisoimage -quiet -r -o "$OUT" "$W/iso"
